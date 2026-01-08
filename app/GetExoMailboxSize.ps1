@@ -12,22 +12,31 @@
 
 .PARAMETER OutputCsv
     Path to the output CSV file. Default is "MailboxSizes.csv".
-
-.EXAMPLE
-    .\GetExoMailboxSize.ps1 -InputFile "users.txt"
-    Gets mailbox sizes for users in users.txt and exports to MailboxSizes.csv.
 #>
 
 param (
-    [string]$InputFile = "$PSScriptRoot/users.txt",
-    [string]$OutputCsv = "$PSScriptRoot/MailboxSizes.csv"
+    [string]$InputFile,
+    [string]$OutputCsv
 )
+
+# --- CONFIGURATION ---
+# Default file paths if not provided as parameters
+if ([string]::IsNullOrWhiteSpace($InputFile)) {
+    $InputFile = "$PSScriptRoot/users.txt"
+}
+
+if ([string]::IsNullOrWhiteSpace($OutputCsv)) {
+    $OutputCsv = "$PSScriptRoot/MailboxSizes.csv"
+}
+# ---------------------
+
+Write-Host "Input File: $InputFile" -ForegroundColor Gray
+Write-Host "Output File: $OutputCsv" -ForegroundColor Gray
 
 # Check if ExchangeOnlineManagement module is available
 if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
     Write-Warning "ExchangeOnlineManagement module is not installed."
     Write-Warning "Please install it using: Install-Module -Name ExchangeOnlineManagement"
-    # Attempt to continue, assuming it might be loaded or available in the session
 }
 
 # Connect to Exchange Online if not already connected
@@ -39,7 +48,6 @@ try {
     $null = Get-EXOMailbox -ResultSize 1 -ErrorAction Stop
     $isConnected = $true
 } catch {
-    # Not connected or other error
     $isConnected = $false
 }
 
@@ -58,6 +66,7 @@ if (-not $isConnected) {
 # Check input file
 if (-not (Test-Path $InputFile)) {
     Write-Error "Input file not found: $InputFile"
+    Write-Error "Please ensure '$InputFile' exists and contains a list of UserPrincipalNames."
     exit
 }
 
