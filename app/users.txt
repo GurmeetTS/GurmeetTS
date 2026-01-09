@@ -1,0 +1,3 @@
+john.doe@example.com
+jane.smith@example.com
+admin@contoso.com
