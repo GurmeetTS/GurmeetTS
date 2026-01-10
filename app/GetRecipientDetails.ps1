@@ -67,10 +67,24 @@ foreach ($row in $smtpAddresses) {
 
         if ($recipient) {
             foreach ($recip in $recipient) {
+                $upn = $recip.UserPrincipalName
+
+                # If UPN is missing, try to fetch it via Get-User
+                if ([string]::IsNullOrWhiteSpace($upn)) {
+                    try {
+                        $user = Get-User -Identity $recip.Id -ErrorAction SilentlyContinue
+                        if ($user) {
+                            $upn = $user.UserPrincipalName
+                        }
+                    } catch {
+                        # Ignore errors if Get-User fails, just leave UPN empty
+                    }
+                }
+
                  $results += [PSCustomObject]@{
                     InputSmtpAddress     = $smtp
                     DisplayName          = $recip.DisplayName
-                    UserPrincipalName    = $recip.UserPrincipalName
+                    UserPrincipalName    = $upn
                     PrimarySmtpAddress   = $recip.PrimarySmtpAddress
                     RecipientType        = $recip.RecipientType
                     RecipientTypeDetails = $recip.RecipientTypeDetails
