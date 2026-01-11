@@ -48,13 +48,13 @@ process {
                 # If a critical error occurs processing a row, we skip it (catch block)
 
                 # Extract values, handling nulls by strictly returning empty string
-                $rowValues = @(
-                    if ($mbx.DisplayName) { $mbx.DisplayName } else { "" },
-                    if ($mbx.UserPrincipalName) { $mbx.UserPrincipalName } else { "" },
-                    if ($mbx.PrimarySmtpAddress) { $mbx.PrimarySmtpAddress } else { "" },
-                    if ($mbx.RecipientTypeDetails) { $mbx.RecipientTypeDetails } else { "" },
-                    if ($mbx.Alias) { $mbx.Alias } else { "" }
-                )
+                $dName = if ($mbx.DisplayName) { $mbx.DisplayName } else { "" }
+                $upn   = if ($mbx.UserPrincipalName) { $mbx.UserPrincipalName } else { "" }
+                $smtp  = if ($mbx.PrimarySmtpAddress) { $mbx.PrimarySmtpAddress } else { "" }
+                $type  = if ($mbx.RecipientTypeDetails) { $mbx.RecipientTypeDetails } else { "" }
+                $alias = if ($mbx.Alias) { $mbx.Alias } else { "" }
+
+                $rowValues = @($dName, $upn, $smtp, $type, $alias)
 
                 # Format as Markdown row
                 $rowMarkdown = "| " + ($rowValues -join " | ") + " |"
