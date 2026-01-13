@@ -1,0 +1,3 @@
+Mailbox,User
+target.mailbox@example.com,user.to.grant@example.com
+shared.mailbox@example.com,admin.user@example.com
