@@ -3,7 +3,7 @@
     Exports mailbox permissions (Full Access, Send As, Send on Behalf) to a CSV file.
 
 .DESCRIPTION
-    This script reads a list of mailboxes from a CSV file and retrieves the following permissions:
+    This script reads a list of mailboxes from a plain text file (one identity per line) and retrieves:
     - Full Access: Using Get-MailboxPermission
     - Send As: Using Get-RecipientPermission
     - Send on Behalf: Using Get-Mailbox (GrantSendOnBehalfTo property)
@@ -11,23 +11,23 @@
     The script aggregates these permissions and exports them to a CSV file.
     It requires the ExchangeOnlineManagement module and an active connection to Exchange Online.
 
-.PARAMETER InputCsv
-    Path to the input CSV file containing a 'UserPrincipalName' column.
-    Default is 'Mailboxes.csv' in the script directory.
+.PARAMETER InputFile
+    Path to the input text file containing a list of mailbox UserPrincipalNames (one per line).
+    Default is 'Mailboxes.txt' in the script directory.
 
 .PARAMETER OutputCsv
     Path to the output CSV file where results will be saved.
     Default is 'MailboxPermissionsReport.csv' in the script directory.
 
 .EXAMPLE
-    .\ExportMailboxPermissions.ps1 -InputCsv "MyMailboxes.csv"
+    .\ExportMailboxPermissions.ps1 -InputFile "MyMailboxes.txt"
 
 .EXAMPLE
     .\ExportMailboxPermissions.ps1 -OutputCsv "Report.csv"
 #>
 
 param (
-    [string]$InputCsv = "$PSScriptRoot\Mailboxes.csv",
+    [string]$InputFile = "$PSScriptRoot\Mailboxes.txt",
     [string]$OutputCsv = "$PSScriptRoot\MailboxPermissionsReport.csv"
 )
 
@@ -48,8 +48,6 @@ try {
     $null = Get-Mailbox -Identity "scan-me-to-check-connection-status" -ErrorAction SilentlyContinue
 } catch {
     # If we are not connected, we might want to connect.
-    # However, standard practice is to let the user handle connection or prompt.
-    # We will attempt to connect if it seems we aren't.
     Write-Host "It seems you are not connected to Exchange Online." -ForegroundColor Cyan
     Write-Host "Attempting to connect..." -ForegroundColor Cyan
     Connect-ExchangeOnline
@@ -59,21 +57,20 @@ try {
 # Validate Input
 # ---------------------------------------------------------------------------
 
-if (-not (Test-Path $InputCsv)) {
-    Write-Error "Input file '$InputCsv' not found. Please create the file or specify a valid path."
+if (-not (Test-Path $InputFile)) {
+    Write-Error "Input file '$InputFile' not found. Please create the file or specify a valid path."
     exit
 }
 
-$mailboxes = Import-Csv $InputCsv
+# Read the file and filter out empty lines or comments
+$mailboxes = Get-Content $InputFile | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not $_.StartsWith("#") }
+
 if (-not $mailboxes) {
-    Write-Error "Input CSV '$InputCsv' is empty or could not be parsed."
+    Write-Error "Input file '$InputFile' is empty."
     exit
 }
 
-if (-not $mailboxes[0].PSObject.Properties['UserPrincipalName']) {
-    Write-Error "Input CSV must have a 'UserPrincipalName' column."
-    exit
-}
+Write-Host "Found $($mailboxes.Count) mailboxes to process." -ForegroundColor Green
 
 # ---------------------------------------------------------------------------
 # Process Mailboxes
@@ -81,9 +78,8 @@ if (-not $mailboxes[0].PSObject.Properties['UserPrincipalName']) {
 
 $results = @()
 
-foreach ($row in $mailboxes) {
-    $upn = $row.UserPrincipalName
-    if ([string]::IsNullOrWhiteSpace($upn)) { continue }
+foreach ($upn in $mailboxes) {
+    $upn = $upn.Trim()
 
     Write-Host "Processing mailbox: $upn" -ForegroundColor Cyan
 

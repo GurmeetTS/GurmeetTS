@@ -17,20 +17,20 @@ The script outputs a comprehensive CSV report detailing which users have which t
 
 ## Setup
 
-1.  Prepare a CSV file containing the list of mailboxes you want to audit. The CSV file must have a header named `UserPrincipalName`.
+1.  Prepare a text file containing the list of mailboxes you want to audit. The file should contain one UserPrincipalName per line.
 
-    Example `Mailboxes.csv`:
-    ```csv
-    UserPrincipalName
+    Example `Mailboxes.txt`:
+    ```text
     ceo@contoso.com
     finance@contoso.com
+    shared-mailbox@contoso.com
     ```
 
 ## Usage
 
 1.  Open PowerShell.
 2.  Navigate to the directory containing the script.
-3.  Run the script. By default, it looks for `Mailboxes.csv` in the same directory.
+3.  Run the script. By default, it looks for `Mailboxes.txt` in the same directory.
 
     ```powershell
     .\ExportMailboxPermissions.ps1
@@ -41,7 +41,7 @@ The script outputs a comprehensive CSV report detailing which users have which t
 You can specify custom input and output file paths using the parameters:
 
 ```powershell
-.\ExportMailboxPermissions.ps1 -InputCsv "C:\Temp\MyMailboxes.csv" -OutputCsv "C:\Reports\AccessReport.csv"
+.\ExportMailboxPermissions.ps1 -InputFile "C:\Temp\MyList.txt" -OutputCsv "C:\Reports\AccessReport.csv"
 ```
 
 ## Output
