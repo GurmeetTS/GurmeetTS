@@ -45,10 +45,15 @@ $report = @()
 foreach ($user in $users) {
     Write-Host "Processing user: $user" -ForegroundColor Cyan
     try {
-        $stats = Get-EXOMailboxStatistics -Identity $user -ErrorAction Stop
+        # First resolve the mailbox to get the ExchangeGuid.
+        # This is more robust than passing the UPN directly to Get-EXOMailboxStatistics.
+        $mailbox = Get-EXOMailbox -Identity $user -ErrorAction Stop
+
+        # Use ExchangeGuid for statistics retrieval
+        $stats = Get-EXOMailboxStatistics -Identity $mailbox.ExchangeGuid -ErrorAction Stop
 
         $props = [PSCustomObject]@{
-            UserPrincipalName = $user
+            UserPrincipalName = $mailbox.UserPrincipalName
             DisplayName       = $stats.DisplayName
             ItemCount         = $stats.ItemCount
             TotalItemSize     = $stats.TotalItemSize.ToString()
