@@ -1,0 +1,4 @@
+mailbox_address,permissions
+shared1@example.com,FullAccess;SendAs
+shared2@example.com,FullAccess
+shared3@example.com,SendAs
