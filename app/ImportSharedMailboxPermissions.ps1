@@ -47,6 +47,7 @@ if (-not (Test-Path $CsvFilePath)) {
 $csv = Import-Csv $CsvFilePath
 $results = @()
 $domains = @("ruckusnetworks.com", "auroranetworks.com", "vistancenetworks.com")
+$userCache = @{}
 
 foreach ($row in $csv) {
     # Normalize column names
@@ -69,19 +70,28 @@ foreach ($row in $csv) {
     $resolvedUser = $null
     $resolutionStatus = "NotFound"
 
-    foreach ($domain in $domains) {
-        $candidateUPN = "$localPart@$domain"
-        try {
-            $recipient = Get-Recipient -Identity $candidateUPN -ErrorAction Stop
-            if ($recipient) {
-                $resolvedUser = $candidateUPN
-                $resolutionStatus = "Resolved-$domain"
-                Write-Verbose "Found user: $resolvedUser"
-                break
-            }
-        } catch {
-            # Continue to next domain
+    if ($userCache.ContainsKey($localPart)) {
+        $resolvedUser = $userCache[$localPart]
+        if ($resolvedUser) {
+            $resolutionStatus = "Cached"
+            Write-Verbose "Found user (Cached): $resolvedUser"
         }
+    } else {
+        foreach ($domain in $domains) {
+            $candidateUPN = "$localPart@$domain"
+            try {
+                $recipient = Get-Recipient -Identity $candidateUPN -ErrorAction Stop
+                if ($recipient) {
+                    $resolvedUser = $candidateUPN
+                    $resolutionStatus = "Resolved-$domain"
+                    Write-Verbose "Found user: $resolvedUser"
+                    break
+                }
+            } catch {
+                # Continue to next domain
+            }
+        }
+        $userCache[$localPart] = $resolvedUser
     }
 
     $status = "Skipped"
