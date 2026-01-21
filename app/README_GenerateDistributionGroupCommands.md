@@ -30,6 +30,7 @@ You can use the provided `DistributionGroupsTemplate.csv` as a template or creat
 | **MemberDepartRestriction**| Restriction for members leaving (`Open` or `Closed`). | `Closed` |
 | **MemberJoinRestriction** | Restriction for members joining (`Open` or `Closed`). | `Closed` |
 | **RequireSenderAuthenticationEnabled** | `TRUE` to require sender auth (internal only), `FALSE` for external. | `TRUE` |
+| **Members** | (Optional) Comma-separated list of members (email or alias) to add on creation. | `user1@domain.com, user2` |
 
 ## How to Use
 
@@ -55,14 +56,14 @@ You can use the provided `DistributionGroupsTemplate.csv` as a template or creat
 
 **Input Row (Excel):**
 
-| Name | Type | Alias | PrimarySmtpAddress | ManagedBy | CopyOwnerToMember | MemberDepartRestriction | MemberJoinRestriction | RequireSenderAuthenticationEnabled |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| #DL_Ruckus-extendedstaff | Security | #DL_Ruckus-extendedstaff | #DL_Ruckus-extendedstaff@commscope.com | LOCCENA | TRUE | Closed | Closed | TRUE |
+| Name | Type | Alias | PrimarySmtpAddress | ManagedBy | CopyOwnerToMember | MemberDepartRestriction | MemberJoinRestriction | RequireSenderAuthenticationEnabled | Members |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| #DL_Ruckus-extendedstaff | Security | #DL_Ruckus-extendedstaff | #DL_Ruckus-extendedstaff@commscope.com | LOCCENA | TRUE | Closed | Closed | TRUE | user1@commscope.com, user2@commscope.com |
 
 **Generated Command:**
 
 ```powershell
-New-DistributionGroup -Name "#DL_Ruckus-extendedstaff" -Type "Security" -Alias "#DL_Ruckus-extendedstaff" -PrimarySmtpAddress "#DL_Ruckus-extendedstaff@commscope.com" -ManagedBy "LOCCENA" -CopyOwnerToMember -MemberDepartRestriction "Closed" -MemberJoinRestriction "Closed" -RequireSenderAuthenticationEnabled $True
+New-DistributionGroup -Name "#DL_Ruckus-extendedstaff" -Type "Security" -Alias "#DL_Ruckus-extendedstaff" -PrimarySmtpAddress "#DL_Ruckus-extendedstaff@commscope.com" -ManagedBy "LOCCENA" -CopyOwnerToMember -MemberDepartRestriction "Closed" -MemberJoinRestriction "Closed" -RequireSenderAuthenticationEnabled $True -Members "user1@commscope.com","user2@commscope.com"
 ```
 
 ## Notes

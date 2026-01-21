@@ -109,6 +109,16 @@ foreach ($row in $rows) {
         $parts += "-RequireSenderAuthenticationEnabled `$False"
     }
 
+    # Add optional Members parameter
+    # Logic: If Members column is present and not empty, split by comma and add.
+    if (-not [string]::IsNullOrWhiteSpace($row.Members)) {
+        # Split by comma and trim whitespace
+        $memberList = $row.Members -split ',' | ForEach-Object { $_.Trim() }
+        # Join with quotes and commas: "user1","user2"
+        $formattedMembers = $memberList | ForEach-Object { "`"$_`"" }
+        $parts += "-Members " + ($formattedMembers -join ",")
+    }
+
     # 4. Output the final command string
     Write-Host ($parts -join " ")
 }
