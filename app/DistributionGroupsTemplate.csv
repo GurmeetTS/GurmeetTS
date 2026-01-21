@@ -1,0 +1,2 @@
+Name,Type,Alias,PrimarySmtpAddress,ManagedBy,CopyOwnerToMember,MemberDepartRestriction,MemberJoinRestriction,RequireSenderAuthenticationEnabled
+"#DL_Ruckus-extendedstaff",Security,"#DL_Ruckus-extendedstaff","#DL_Ruckus-extendedstaff@commscope.com",LOCCENA,TRUE,Closed,Closed,TRUE
