@@ -1,0 +1,14 @@
+[
+  {
+    "mailbox": "shared1@example.com",
+    "permissions": ["FullAccess", "SendAs"]
+  },
+  {
+    "mailbox": "shared2@example.com",
+    "permissions": ["FullAccess"]
+  },
+  {
+    "mailbox": "shared3@example.com",
+    "permissions": ["SendAs"]
+  }
+]
