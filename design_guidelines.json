@@ -1,0 +1,121 @@
+{
+  "identity": {
+    "name": "E1",
+    "persona": "The Anti-AI Designer",
+    "archetype": "Swiss & High-Contrast (Authority, Clarity, Truth)",
+    "vibe": "Enterprise-grade, data-dense, professional, trusted."
+  },
+  "typography": {
+    "headings": {
+      "family": "Manrope",
+      "weights": ["600", "700", "800"],
+      "usage": "Headings, KPI Values, Section Titles",
+      "styles": "tracking-tight"
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "weights": ["400", "500"],
+      "usage": "Data Tables, Body Text, Labels, Inputs",
+      "styles": "leading-relaxed"
+    },
+    "mono": {
+      "family": "JetBrains Mono",
+      "usage": "Code Snippets, IDs, Logs, Technical Data"
+    }
+  },
+  "colors": {
+    "mode": "system",
+    "palette": {
+      "primary": {
+        "light": "#2563EB",
+        "dark": "#3B82F6",
+        "name": "Tech Blue"
+      },
+      "background": {
+        "light": "#F8FAFC",
+        "dark": "#0F172A",
+        "name": "Slate Surface"
+      },
+      "surface": {
+        "light": "#FFFFFF",
+        "dark": "#1E293B",
+        "name": "Card Surface"
+      },
+      "border": {
+        "light": "#E2E8F0",
+        "dark": "#334155",
+        "name": "Subtle Border"
+      },
+      "semantic": {
+        "success": "#10B981",
+        "warning": "#F59E0B",
+        "error": "#EF4444",
+        "info": "#3B82F6"
+      }
+    },
+    "rules": "No gradients for backgrounds. Use solid colors. Gradients only for subtle active states or 'Tracing Beam' borders."
+  },
+  "layout": {
+    "grid_system": "Bento Grid Mode B (High Density)",
+    "spacing": "Compact for data density (p-4, gap-4). Relaxed for containers (p-6).",
+    "structure": {
+      "sidebar": "Collapsible, 240px width (expanded), 64px (collapsed). Dark textured background.",
+      "topbar": "Sticky, glassmorphism (backdrop-blur-md), h-16.",
+      "main": "p-6, max-w-[1600px] mx-auto."
+    }
+  },
+  "components": {
+    "cards": {
+      "style": "Flat, 1px border, no shadow (Dark Mode) / Subtle shadow-sm (Light Mode).",
+      "radius": "rounded-lg"
+    },
+    "buttons": {
+      "style": "Sharp or slightly rounded (rounded-md). High contrast.",
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+    },
+    "inputs": {
+      "style": "h-9 (compact), text-sm, bg-background border-input."
+    },
+    "tables": {
+      "style": "Dense, row hover effects, sticky header.",
+      "features": "Pagination, Sorting, Filtering, Export."
+    },
+    "charts": {
+      "library": "Recharts",
+      "style": "Minimalist, thin lines (stroke-width=2), custom tooltips.",
+      "palette": ["#2563EB", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"]
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Used for Topbar and Toast notifications only.",
+    "textures": "Subtle noise overlay on sidebar background.",
+    "micro_interactions": "Hover states on table rows (bg-muted/50). Button press scale (active:scale-95)."
+  },
+  "images": {
+    "login_background": "https://images.unsplash.com/photo-1754992076711-3d765ac15737",
+    "server_room_illustration": "https://images.pexels.com/photos/17323801/pexels-photo-17323801.jpeg",
+    "placeholders": {
+      "user_avatar": "https://ui-avatars.com/api/?background=random",
+      "logo": "Use Lucide Icon (ShieldCheck or LayoutDashboard)"
+    }
+  },
+  "component_path": "/app/frontend/src/components/ui",
+  "instructions_to_main_agent": [
+    "IMPLEMENT THEME TOGGLE IMMEDIATELY: Wrap the app in a ThemeProvider.",
+    "USE SHADCN COMPONENTS: Do not build custom UI from scratch unless necessary.",
+    "DENSITY IS KEY: This is an admin tool. Avoid excessive whitespace in data tables.",
+    "CHARTS: Use Recharts for all data visualization.",
+    "NAVIGATION: Implement the sidebar with collapsible functionality.",
+    "MOCK DATA: Generate realistic mock data for M365 reports (Exchange, Entra ID).",
+    "AUTHENTICATION: Build a professional Login page with the provided background image."
+  ],
+  "universal_guidelines": [
+    "DO NOT apply universal transition: * { transition: all ... }",
+    "DO NOT center align the app container.",
+    "Use 'sonner' for toasts.",
+    "Ensure all interactive elements have data-testid attributes.",
+    "Respect prefers-reduced-motion.",
+    "Use semantic HTML (nav, main, aside, section)."
+  ]
+}
