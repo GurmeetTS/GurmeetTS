@@ -1,16 +1,19 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Moon, Sun, Search, LogOut, User } from 'lucide-react';
+import { Bell, Moon, Sun, Search, LogOut, User, Building2, ChevronDown, Wifi, TestTube2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuth } from '../context/AuthContext';
+import { useTenant } from '../context/TenantContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Badge } from './ui/badge';
 
 const routeLabels = {
   '/dashboard': { title: 'Dashboard', sub: 'Executive Overview' },
@@ -24,11 +27,13 @@ const routeLabels = {
   '/entra/conditional-access': { title: 'Conditional Access', sub: 'Entra ID' },
   '/alerts': { title: 'Alerts', sub: 'Security Monitoring' },
   '/settings': { title: 'Settings', sub: 'Account & Preferences' },
+  '/tenants': { title: 'Tenant Management', sub: 'Connected Tenants' },
 };
 
 export default function Topbar() {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { tenants, activeTenant, switchTenant } = useTenant();
   const location = useLocation();
   const navigate = useNavigate();
   const page = routeLabels[location.pathname] || { title: 'M365 Analytics', sub: '' };
@@ -41,7 +46,7 @@ export default function Topbar() {
   return (
     <header
       data-testid="topbar"
-      className="h-14 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10 flex items-center px-6 gap-4 shrink-0"
+      className="h-14 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-10 flex items-center px-6 gap-3 shrink-0"
     >
       {/* Page title */}
       <div className="flex-1 min-w-0">
@@ -53,8 +58,57 @@ export default function Topbar() {
         </div>
       </div>
 
+      {/* Tenant Switcher */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="h-8 px-2.5 gap-1.5 text-xs max-w-44" data-testid="tenant-switcher">
+            {activeTenant?.mode === 'real' ? (
+              <Wifi className="h-3 w-3 text-green-500 shrink-0" />
+            ) : (
+              <TestTube2 className="h-3 w-3 text-primary shrink-0" />
+            )}
+            <span className="truncate">{activeTenant?.name || 'Demo Data'}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">Switch Tenant</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => switchTenant(null)}
+            className={!activeTenant ? 'bg-primary/10 text-primary' : ''}
+            data-testid="switch-demo-data"
+          >
+            <TestTube2 className="mr-2 h-3.5 w-3.5 text-primary" />
+            <span className="text-xs">Demo Data</span>
+            {!activeTenant && <Badge className="ml-auto text-xs bg-primary/10 text-primary border-primary/20">Active</Badge>}
+          </DropdownMenuItem>
+          {tenants.map(t => (
+            <DropdownMenuItem
+              key={t.id}
+              onClick={() => switchTenant(t.id)}
+              className={activeTenant?.id === t.id ? 'bg-primary/10 text-primary' : ''}
+              data-testid={`switch-tenant-menu-${t.id}`}
+            >
+              {t.mode === 'real' ? (
+                <Wifi className="mr-2 h-3.5 w-3.5 text-green-500 shrink-0" />
+              ) : (
+                <TestTube2 className="mr-2 h-3.5 w-3.5 text-primary shrink-0" />
+              )}
+              <span className="text-xs truncate">{t.name}</span>
+              {activeTenant?.id === t.id && <Badge className="ml-auto text-xs bg-primary/10 text-primary border-primary/20">Active</Badge>}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => navigate('/tenants')} data-testid="manage-tenants-menu">
+            <Building2 className="mr-2 h-3.5 w-3.5" />
+            <span className="text-xs">Manage Tenants</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       {/* Search */}
-      <div className="relative hidden md:block w-48">
+      <div className="relative hidden md:block w-44">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <Input
           placeholder="Search..."
@@ -65,9 +119,7 @@ export default function Topbar() {
 
       {/* Theme Toggle */}
       <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8"
+        variant="ghost" size="icon" className="h-8 w-8"
         onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         data-testid="theme-toggle"
       >

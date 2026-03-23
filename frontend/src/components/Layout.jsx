@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
@@ -13,9 +13,18 @@ import MFAStatus from '../pages/entra/MFAStatus';
 import ConditionalAccess from '../pages/entra/ConditionalAccess';
 import Alerts from '../pages/Alerts';
 import Settings from '../pages/Settings';
+import Tenants from '../pages/Tenants';
+import { useAuth } from '../context/AuthContext';
+import { useTenant } from '../context/TenantContext';
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
+  const { token } = useAuth();
+  const { loadTenants } = useTenant();
+
+  useEffect(() => {
+    if (token) loadTenants();
+  }, [token, loadTenants]);
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -36,6 +45,7 @@ export default function Layout() {
             <Route path="/entra/conditional-access" element={<ConditionalAccess />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/tenants" element={<Tenants />} />
           </Routes>
         </main>
       </div>

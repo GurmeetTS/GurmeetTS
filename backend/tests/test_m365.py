@@ -165,3 +165,94 @@ class TestAlerts:
         assert "alerts" in data
         assert "summary" in data
         assert len(data["alerts"]) > 0
+
+
+# Tenant Management
+class TestTenants:
+    """Tenant CRUD and connection tests"""
+
+    tenant_id = None
+
+    def test_list_tenants_empty_or_existing(self, headers):
+        r = requests.get(f"{BASE_URL}/api/tenants", headers=headers)
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+
+    def test_create_demo_tenant(self, headers):
+        r = requests.post(f"{BASE_URL}/api/tenants", json={
+            "name": "TEST_Corp Demo",
+            "mode": "demo",
+            "description": "Test demo tenant"
+        }, headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["name"] == "TEST_Corp Demo"
+        assert data["mode"] == "demo"
+        assert "id" in data
+        TestTenants.tenant_id = data["id"]
+
+    def test_get_tenant_after_create(self, headers):
+        if not TestTenants.tenant_id:
+            pytest.skip("No tenant created")
+        r = requests.get(f"{BASE_URL}/api/tenants", headers=headers)
+        assert r.status_code == 200
+        ids = [t["id"] for t in r.json()]
+        assert TestTenants.tenant_id in ids
+
+    def test_update_tenant(self, headers):
+        if not TestTenants.tenant_id:
+            pytest.skip("No tenant created")
+        r = requests.put(f"{BASE_URL}/api/tenants/{TestTenants.tenant_id}", json={
+            "name": "TEST_Corp Demo Updated",
+            "mode": "demo"
+        }, headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["name"] == "TEST_Corp Demo Updated"
+
+    def test_create_real_tenant(self, headers):
+        r = requests.post(f"{BASE_URL}/api/tenants", json={
+            "name": "TEST_Real Tenant",
+            "mode": "real",
+            "azure_tenant_id": "fake-tenant-id-1234",
+            "client_id": "fake-client-id-5678",
+            "client_secret": "fake-secret"
+        }, headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["mode"] == "real"
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/tenants/{data['id']}", headers=headers)
+
+    def test_test_connection_real_tenant_fails_gracefully(self, headers):
+        """Test connection on a real tenant with fake creds should not 500"""
+        # Create real tenant
+        r = requests.post(f"{BASE_URL}/api/tenants", json={
+            "name": "TEST_Real Conn",
+            "mode": "real",
+            "azure_tenant_id": "00000000-fake-0000-0000-000000000000",
+            "client_id": "00000000-fake-0000-0000-000000000001",
+            "client_secret": "fakesecret123"
+        }, headers=headers)
+        assert r.status_code == 200
+        tid = r.json()["id"]
+        # Test connection - should return success=False, not 500
+        rc = requests.post(f"{BASE_URL}/api/tenants/{tid}/test-connection", json={}, headers=headers)
+        assert rc.status_code == 200
+        assert "success" in rc.json()
+        # Cleanup
+        requests.delete(f"{BASE_URL}/api/tenants/{tid}", headers=headers)
+
+    def test_delete_tenant(self, headers):
+        if not TestTenants.tenant_id:
+            pytest.skip("No tenant created")
+        r = requests.delete(f"{BASE_URL}/api/tenants/{TestTenants.tenant_id}", headers=headers)
+        assert r.status_code in [200, 204]
+        # Verify deletion
+        r2 = requests.get(f"{BASE_URL}/api/tenants", headers=headers)
+        ids = [t["id"] for t in r2.json()]
+        assert TestTenants.tenant_id not in ids
+
+    def test_tenants_require_auth(self):
+        r = requests.get(f"{BASE_URL}/api/tenants")
+        assert r.status_code == 403

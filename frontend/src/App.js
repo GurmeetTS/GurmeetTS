@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { TenantProvider } from "./context/TenantContext";
 import Login from "./pages/Login";
 import Layout from "./components/Layout";
 
@@ -35,10 +36,12 @@ function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <AuthProvider>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-        <Toaster richColors position="top-right" />
+        <TenantProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+          <Toaster richColors position="top-right" />
+        </TenantProvider>
       </AuthProvider>
     </ThemeProvider>
   );

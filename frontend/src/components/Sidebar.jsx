@@ -3,20 +3,16 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Mail, Shield, Bell, Settings, ChevronDown, ChevronRight,
   Inbox, UserX, TrendingUp, ArrowRightLeft, LogIn, AlertTriangle,
-  Smartphone, Lock, ChevronLeft, ShieldCheck
+  Smartphone, Lock, ChevronLeft, ShieldCheck, Building2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
+import { useTenant } from '../context/TenantContext';
 
 const navConfig = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   {
-    label: 'Dashboard',
-    icon: LayoutDashboard,
-    path: '/dashboard',
-  },
-  {
-    label: 'Exchange Online',
-    icon: Mail,
+    label: 'Exchange Online', icon: Mail,
     children: [
       { label: 'Mailbox Usage', path: '/exchange/mailbox-usage', icon: Inbox },
       { label: 'Inactive Mailboxes', path: '/exchange/inactive-mailboxes', icon: UserX },
@@ -25,8 +21,7 @@ const navConfig = [
     ],
   },
   {
-    label: 'Entra ID',
-    icon: Shield,
+    label: 'Entra ID', icon: Shield,
     children: [
       { label: 'Sign-in Logs', path: '/entra/signin-logs', icon: LogIn },
       { label: 'Risky Users', path: '/entra/risky-users', icon: AlertTriangle },
@@ -35,6 +30,7 @@ const navConfig = [
     ],
   },
   { label: 'Alerts', icon: Bell, path: '/alerts', badge: 7 },
+  { label: 'Tenants', icon: Building2, path: '/tenants' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
@@ -125,6 +121,7 @@ function NavSection({ item, collapsed }) {
 
 export default function Sidebar({ collapsed, onToggle }) {
   const { user } = useAuth();
+  const { activeTenant } = useTenant();
 
   return (
     <aside
@@ -142,7 +139,9 @@ export default function Sidebar({ collapsed, onToggle }) {
         {!collapsed && (
           <div>
             <p className="text-sm font-bold text-foreground leading-tight">M365 Analytics</p>
-            <p className="text-xs text-muted-foreground">{user?.tenant || 'Contoso Corp'}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-36">
+              {activeTenant ? activeTenant.name : (user?.tenant || 'Contoso Corp')}
+            </p>
           </div>
         )}
       </div>
