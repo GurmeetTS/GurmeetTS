@@ -1,74 +1,294 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
-
+from pydantic import BaseModel
+from datetime import datetime, timezone, timedelta
+import bcrypt
+from jose import JWTError, jwt
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+SECRET_KEY = os.environ.get('SECRET_KEY', 'm365-analytics-secret-key-2025')
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+security = HTTPBearer()
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# --- Models ---
+class UserRegister(BaseModel):
+    name: str
+    email: str
+    password: str
 
-# Add your routes to the router instead of directly to app
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+# --- Auth helpers ---
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+def create_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# --- Auth Routes ---
+@api_router.post("/auth/register")
+async def register(data: UserRegister):
+    existing = await db.users.find_one({"email": data.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = {
+        "name": data.name,
+        "email": data.email,
+        "password": hash_password(data.password),
+        "role": "Global Admin",
+        "tenant": "Contoso Corporation",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    result = await db.users.insert_one(user)
+    token = create_token({"sub": str(result.inserted_id), "email": data.email})
+    return {"token": token, "user": {"name": data.name, "email": data.email, "role": "Global Admin", "tenant": "Contoso Corporation"}}
+
+@api_router.post("/auth/login")
+async def login(data: UserLogin):
+    user = await db.users.find_one({"email": data.email}, {"_id": 1, "name": 1, "email": 1, "password": 1, "role": 1, "tenant": 1})
+    if not user or not verify_password(data.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_token({"sub": str(user["_id"]), "email": user["email"]})
+    return {"token": token, "user": {"name": user["name"], "email": user["email"], "role": user.get("role", "Global Admin"), "tenant": user.get("tenant", "Contoso Corporation")}}
+
+# --- Dashboard ---
+@api_router.get("/dashboard/overview")
+async def dashboard_overview(_: str = Depends(get_current_user)):
+    return {
+        "tenant_health_score": 87,
+        "secure_score": 72,
+        "secure_score_max": 100,
+        "total_users": 1248,
+        "active_users_30d": 934,
+        "inactive_users": 314,
+        "licensed_users": 1100,
+        "unlicensed_users": 148,
+        "storage_used_gb": 8420,
+        "storage_total_gb": 15360,
+        "storage_percent": 54.8,
+        "mfa_enabled_percent": 78.3,
+        "risky_users_count": 12,
+        "active_alerts": 7,
+        "license_breakdown": [
+            {"name": "M365 E3", "assigned": 650, "total": 700},
+            {"name": "M365 E1", "assigned": 280, "total": 300},
+            {"name": "Teams Phone", "assigned": 145, "total": 150},
+            {"name": "Power BI Pro", "assigned": 85, "total": 100},
+        ],
+        "storage_trends": [
+            {"month": "Sep", "used": 6800},
+            {"month": "Oct", "used": 7100},
+            {"month": "Nov", "used": 7450},
+            {"month": "Dec", "used": 7800},
+            {"month": "Jan", "used": 8100},
+            {"month": "Feb", "used": 8420},
+        ],
+        "user_activity_trend": [
+            {"date": "Mon", "active": 820, "inactive": 428},
+            {"date": "Tue", "active": 890, "inactive": 358},
+            {"date": "Wed", "active": 934, "inactive": 314},
+            {"date": "Thu", "active": 870, "inactive": 378},
+            {"date": "Fri", "active": 780, "inactive": 468},
+            {"date": "Sat", "active": 320, "inactive": 928},
+            {"date": "Sun", "active": 210, "inactive": 1038},
+        ],
+        "recent_alerts": [
+            {"id": "a1", "title": "Suspicious Login Detected", "severity": "High", "time": "2m ago", "source": "Entra ID"},
+            {"id": "a2", "title": "External Forwarding Rule Created", "severity": "Critical", "time": "1h ago", "source": "Exchange"},
+            {"id": "a3", "title": "Impossible Travel Detected", "severity": "High", "time": "3h ago", "source": "Entra ID"},
+            {"id": "a4", "title": "MFA Disabled on Admin Account", "severity": "High", "time": "5h ago", "source": "Entra ID"},
+            {"id": "a5", "title": "Malware Emails Blocked (22)", "severity": "Medium", "time": "8h ago", "source": "Exchange"},
+        ]
+    }
+
+# --- Exchange Online ---
+@api_router.get("/exchange/mailbox-usage")
+async def mailbox_usage(_: str = Depends(get_current_user)):
+    data = [
+        {"user": "john.smith@contoso.com", "display_name": "John Smith", "mailbox_type": "UserMailbox", "storage_mb": 8420, "quota_mb": 51200, "item_count": 12450, "last_logon": "2025-02-10", "status": "Active"},
+        {"user": "sarah.johnson@contoso.com", "display_name": "Sarah Johnson", "mailbox_type": "UserMailbox", "storage_mb": 6830, "quota_mb": 51200, "item_count": 9870, "last_logon": "2025-02-11", "status": "Active"},
+        {"user": "mike.davis@contoso.com", "display_name": "Mike Davis", "mailbox_type": "UserMailbox", "storage_mb": 15200, "quota_mb": 51200, "item_count": 22100, "last_logon": "2025-02-09", "status": "Active"},
+        {"user": "emily.chen@contoso.com", "display_name": "Emily Chen", "mailbox_type": "UserMailbox", "storage_mb": 2340, "quota_mb": 51200, "item_count": 3450, "last_logon": "2025-01-15", "status": "Inactive"},
+        {"user": "robert.wilson@contoso.com", "display_name": "Robert Wilson", "mailbox_type": "SharedMailbox", "storage_mb": 18900, "quota_mb": 51200, "item_count": 35600, "last_logon": "2025-02-11", "status": "Active"},
+        {"user": "lisa.anderson@contoso.com", "display_name": "Lisa Anderson", "mailbox_type": "UserMailbox", "storage_mb": 4200, "quota_mb": 51200, "item_count": 6700, "last_logon": "2025-02-08", "status": "Active"},
+        {"user": "david.martinez@contoso.com", "display_name": "David Martinez", "mailbox_type": "UserMailbox", "storage_mb": 9800, "quota_mb": 51200, "item_count": 15200, "last_logon": "2025-02-11", "status": "Active"},
+        {"user": "jennifer.taylor@contoso.com", "display_name": "Jennifer Taylor", "mailbox_type": "UserMailbox", "storage_mb": 1200, "quota_mb": 51200, "item_count": 1800, "last_logon": "2024-11-20", "status": "Inactive"},
+        {"user": "it.helpdesk@contoso.com", "display_name": "IT Help Desk", "mailbox_type": "SharedMailbox", "storage_mb": 25600, "quota_mb": 51200, "item_count": 48200, "last_logon": "2025-02-11", "status": "Active"},
+        {"user": "kevin.brown@contoso.com", "display_name": "Kevin Brown", "mailbox_type": "UserMailbox", "storage_mb": 3400, "quota_mb": 51200, "item_count": 5100, "last_logon": "2025-02-07", "status": "Active"},
+        {"user": "nancy.white@contoso.com", "display_name": "Nancy White", "mailbox_type": "UserMailbox", "storage_mb": 7200, "quota_mb": 51200, "item_count": 10800, "last_logon": "2025-02-10", "status": "Active"},
+        {"user": "paul.garcia@contoso.com", "display_name": "Paul Garcia", "mailbox_type": "RoomMailbox", "storage_mb": 450, "quota_mb": 10240, "item_count": 680, "last_logon": "2025-02-11", "status": "Active"},
+        {"user": "patricia.lee@contoso.com", "display_name": "Patricia Lee", "mailbox_type": "UserMailbox", "storage_mb": 11400, "quota_mb": 51200, "item_count": 18900, "last_logon": "2025-02-11", "status": "Active"},
+        {"user": "christopher.hall@contoso.com", "display_name": "Christopher Hall", "mailbox_type": "UserMailbox", "storage_mb": 890, "quota_mb": 51200, "item_count": 1200, "last_logon": "2024-12-05", "status": "Inactive"},
+        {"user": "barbara.king@contoso.com", "display_name": "Barbara King", "mailbox_type": "UserMailbox", "storage_mb": 5600, "quota_mb": 51200, "item_count": 8400, "last_logon": "2025-02-09", "status": "Active"},
+    ]
+    return {"data": data, "summary": {"total_mailboxes": 1248, "active": 934, "inactive": 314, "shared": 87, "room": 24, "total_storage_gb": 8420}}
+
+@api_router.get("/exchange/inactive-mailboxes")
+async def inactive_mailboxes(_: str = Depends(get_current_user)):
+    data = [
+        {"user": "jennifer.taylor@contoso.com", "display_name": "Jennifer Taylor", "department": "Marketing", "last_logon": "2024-11-20", "days_inactive": 83, "mailbox_size_mb": 1200, "license": "Microsoft 365 E1", "risk_level": "Medium"},
+        {"user": "emily.chen@contoso.com", "display_name": "Emily Chen", "department": "Engineering", "last_logon": "2025-01-15", "days_inactive": 27, "mailbox_size_mb": 2340, "license": "Microsoft 365 E3", "risk_level": "Low"},
+        {"user": "christopher.hall@contoso.com", "display_name": "Christopher Hall", "department": "Sales", "last_logon": "2024-12-05", "days_inactive": 68, "mailbox_size_mb": 890, "license": "Microsoft 365 E1", "risk_level": "Medium"},
+        {"user": "mark.thompson@contoso.com", "display_name": "Mark Thompson", "department": "Finance", "last_logon": "2024-09-12", "days_inactive": 152, "mailbox_size_mb": 3200, "license": "Microsoft 365 E3", "risk_level": "High"},
+        {"user": "susan.roberts@contoso.com", "display_name": "Susan Roberts", "department": "HR", "last_logon": "2024-10-01", "days_inactive": 133, "mailbox_size_mb": 1800, "license": "Microsoft 365 E1", "risk_level": "High"},
+        {"user": "james.campbell@contoso.com", "display_name": "James Campbell", "department": "Legal", "last_logon": "2025-01-05", "days_inactive": 37, "mailbox_size_mb": 4100, "license": "Microsoft 365 E3", "risk_level": "Low"},
+        {"user": "patricia.mitchell@contoso.com", "display_name": "Patricia Mitchell", "department": "Operations", "last_logon": "2024-11-01", "days_inactive": 102, "mailbox_size_mb": 2700, "license": "Microsoft 365 E1", "risk_level": "High"},
+        {"user": "thomas.perez@contoso.com", "display_name": "Thomas Perez", "department": "Engineering", "last_logon": "2025-01-20", "days_inactive": 22, "mailbox_size_mb": 5600, "license": "Microsoft 365 E3", "risk_level": "Low"},
+        {"user": "barbara.turner@contoso.com", "display_name": "Barbara Turner", "department": "Marketing", "last_logon": "2024-12-28", "days_inactive": 45, "mailbox_size_mb": 980, "license": "Microsoft 365 E1", "risk_level": "Low"},
+        {"user": "richard.phillips@contoso.com", "display_name": "Richard Phillips", "department": "Finance", "last_logon": "2024-08-15", "days_inactive": 180, "mailbox_size_mb": 7200, "license": "Microsoft 365 E3", "risk_level": "High"},
+    ]
+    return {"data": data, "total": 314, "high_risk": 4, "medium_risk": 2, "low_risk": 4}
+
+@api_router.get("/exchange/mail-traffic")
+async def mail_traffic(_: str = Depends(get_current_user)):
+    trend = [
+        {"date": "Feb 1", "sent": 4250, "received": 8900, "spam": 340, "malware": 12},
+        {"date": "Feb 2", "sent": 3800, "received": 7600, "spam": 290, "malware": 8},
+        {"date": "Feb 3", "sent": 1200, "received": 2400, "spam": 90, "malware": 2},
+        {"date": "Feb 4", "sent": 980, "received": 2100, "spam": 78, "malware": 1},
+        {"date": "Feb 5", "sent": 4580, "received": 9200, "spam": 380, "malware": 15},
+        {"date": "Feb 6", "sent": 4900, "received": 9800, "spam": 420, "malware": 18},
+        {"date": "Feb 7", "sent": 5100, "received": 10200, "spam": 450, "malware": 22},
+        {"date": "Feb 8", "sent": 4750, "received": 9500, "spam": 390, "malware": 14},
+        {"date": "Feb 9", "sent": 3200, "received": 6400, "spam": 240, "malware": 9},
+        {"date": "Feb 10", "sent": 4300, "received": 8600, "spam": 310, "malware": 11},
+        {"date": "Feb 11", "sent": 4680, "received": 9360, "spam": 360, "malware": 16},
+    ]
+    top_senders = [
+        {"user": "john.smith@contoso.com", "sent": 1240, "received": 2180},
+        {"user": "sarah.johnson@contoso.com", "sent": 980, "received": 1890},
+        {"user": "mike.davis@contoso.com", "sent": 1100, "received": 2340},
+        {"user": "lisa.anderson@contoso.com", "sent": 760, "received": 1450},
+        {"user": "david.martinez@contoso.com", "sent": 890, "received": 1780},
+    ]
+    return {"trend": trend, "summary": {"total_sent": 45740, "total_received": 94060, "total_spam": 3351, "total_malware": 128, "spam_filter_rate": 97.8}, "top_senders": top_senders}
+
+@api_router.get("/exchange/forwarding-rules")
+async def forwarding_rules(_: str = Depends(get_current_user)):
+    data = [
+        {"user": "james.campbell@contoso.com", "display_name": "James Campbell", "rule_name": "Forward to personal", "forward_to": "james.campbell@gmail.com", "rule_type": "External", "created_date": "2025-01-15", "status": "Active", "risk_level": "High"},
+        {"user": "patricia.lee@contoso.com", "display_name": "Patricia Lee", "rule_name": "Copy to team", "forward_to": "team-archive@contoso.com", "rule_type": "Internal", "created_date": "2024-12-01", "status": "Active", "risk_level": "Low"},
+        {"user": "mark.thompson@contoso.com", "display_name": "Mark Thompson", "rule_name": "Auto forward all", "forward_to": "m.thompson@yahoo.com", "rule_type": "External", "created_date": "2025-02-01", "status": "Active", "risk_level": "Critical"},
+        {"user": "kevin.brown@contoso.com", "display_name": "Kevin Brown", "rule_name": "Backup copy", "forward_to": "kb-backup@contoso.com", "rule_type": "Internal", "created_date": "2024-11-20", "status": "Active", "risk_level": "Low"},
+        {"user": "nancy.white@contoso.com", "display_name": "Nancy White", "rule_name": "External delegate", "forward_to": "nwhite@vendor.com", "rule_type": "External", "created_date": "2025-01-28", "status": "Active", "risk_level": "High"},
+        {"user": "robert.wilson@contoso.com", "display_name": "Robert Wilson", "rule_name": "Shared inbox rule", "forward_to": "support@contoso.com", "rule_type": "Internal", "created_date": "2024-10-15", "status": "Disabled", "risk_level": "Low"},
+    ]
+    return {"data": data, "summary": {"total_rules": 6, "external_rules": 3, "internal_rules": 3, "critical_risk": 1, "high_risk": 2, "low_risk": 3}}
+
+# --- Entra ID ---
+@api_router.get("/entra/signin-logs")
+async def signin_logs(_: str = Depends(get_current_user)):
+    data = [
+        {"user": "john.smith@contoso.com", "display_name": "John Smith", "ip_address": "192.168.1.100", "location": "New York, US", "device": "Windows 11 / Chrome", "app": "Microsoft 365", "status": "Success", "risk_level": "None", "timestamp": "2025-02-11 09:23:45"},
+        {"user": "sarah.johnson@contoso.com", "display_name": "Sarah Johnson", "ip_address": "185.220.101.45", "location": "Amsterdam, NL", "device": "macOS / Safari", "app": "Exchange Online", "status": "Success", "risk_level": "Medium", "timestamp": "2025-02-11 08:45:12"},
+        {"user": "mike.davis@contoso.com", "display_name": "Mike Davis", "ip_address": "10.0.0.45", "location": "Chicago, US", "device": "Windows 10 / Edge", "app": "SharePoint Online", "status": "Success", "risk_level": "None", "timestamp": "2025-02-11 09:10:33"},
+        {"user": "emily.chen@contoso.com", "display_name": "Emily Chen", "ip_address": "172.16.8.92", "location": "San Francisco, US", "device": "iOS / Mobile", "app": "Microsoft Teams", "status": "Failed", "risk_level": "Low", "timestamp": "2025-02-11 07:58:20"},
+        {"user": "mark.thompson@contoso.com", "display_name": "Mark Thompson", "ip_address": "91.108.4.156", "location": "Moscow, RU", "device": "Linux / Firefox", "app": "Azure Portal", "status": "Blocked", "risk_level": "High", "timestamp": "2025-02-11 06:33:18"},
+        {"user": "robert.wilson@contoso.com", "display_name": "Robert Wilson", "ip_address": "203.0.113.45", "location": "Beijing, CN", "device": "Android / Chrome", "app": "OneDrive", "status": "Blocked", "risk_level": "High", "timestamp": "2025-02-11 05:12:44"},
+        {"user": "lisa.anderson@contoso.com", "display_name": "Lisa Anderson", "ip_address": "192.168.2.55", "location": "Austin, US", "device": "Windows 11 / Chrome", "app": "Microsoft 365", "status": "Success", "risk_level": "None", "timestamp": "2025-02-11 09:30:00"},
+        {"user": "david.martinez@contoso.com", "display_name": "David Martinez", "ip_address": "10.10.5.78", "location": "Miami, US", "device": "Windows 10 / Chrome", "app": "Teams", "status": "Success", "risk_level": "None", "timestamp": "2025-02-11 09:15:22"},
+        {"user": "jennifer.taylor@contoso.com", "display_name": "Jennifer Taylor", "ip_address": "104.16.80.45", "location": "London, UK", "device": "macOS / Chrome", "app": "SharePoint", "status": "Success", "risk_level": "Low", "timestamp": "2025-02-11 14:22:08"},
+        {"user": "kevin.brown@contoso.com", "display_name": "Kevin Brown", "ip_address": "192.168.1.250", "location": "Seattle, US", "device": "Windows 11 / Edge", "app": "Microsoft 365", "status": "Success", "risk_level": "None", "timestamp": "2025-02-11 09:05:33"},
+    ]
+    return {"data": data, "summary": {"total_signins": 15847, "successful": 15312, "failed": 412, "blocked": 123, "unique_users": 934, "suspicious_locations": 8}}
+
+@api_router.get("/entra/risky-users")
+async def risky_users(_: str = Depends(get_current_user)):
+    data = [
+        {"user": "mark.thompson@contoso.com", "display_name": "Mark Thompson", "department": "Finance", "risk_level": "High", "risk_detail": "Unfamiliar sign-in properties", "last_risk_event": "2025-02-11", "sign_in_location": "Moscow, RU", "mfa_enabled": True, "status": "At Risk"},
+        {"user": "robert.wilson@contoso.com", "display_name": "Robert Wilson", "department": "Operations", "risk_level": "High", "risk_detail": "Impossible travel", "last_risk_event": "2025-02-11", "sign_in_location": "Beijing, CN", "mfa_enabled": False, "status": "At Risk"},
+        {"user": "sarah.johnson@contoso.com", "display_name": "Sarah Johnson", "department": "Sales", "risk_level": "Medium", "risk_detail": "Anonymous IP address", "last_risk_event": "2025-02-11", "sign_in_location": "Amsterdam, NL", "mfa_enabled": True, "status": "At Risk"},
+        {"user": "thomas.perez@contoso.com", "display_name": "Thomas Perez", "department": "Engineering", "risk_level": "Medium", "risk_detail": "Malware linked IP", "last_risk_event": "2025-02-10", "sign_in_location": "Tokyo, JP", "mfa_enabled": True, "status": "Remediated"},
+        {"user": "barbara.turner@contoso.com", "display_name": "Barbara Turner", "department": "Marketing", "risk_level": "Low", "risk_detail": "Leaked credentials", "last_risk_event": "2025-02-09", "sign_in_location": "London, UK", "mfa_enabled": False, "status": "At Risk"},
+        {"user": "james.campbell@contoso.com", "display_name": "James Campbell", "department": "Legal", "risk_level": "High", "risk_detail": "Suspicious inbox manipulation", "last_risk_event": "2025-02-08", "sign_in_location": "New York, US", "mfa_enabled": True, "status": "Confirmed Compromised"},
+        {"user": "patricia.mitchell@contoso.com", "display_name": "Patricia Mitchell", "department": "Operations", "risk_level": "Medium", "risk_detail": "Admin confirmed risky", "last_risk_event": "2025-02-07", "sign_in_location": "Chicago, US", "mfa_enabled": True, "status": "Remediated"},
+    ]
+    return {"data": data, "summary": {"total_risky": 12, "high_risk": 3, "medium_risk": 5, "low_risk": 4, "confirmed_compromised": 1, "remediated": 2, "at_risk": 9}}
+
+@api_router.get("/entra/mfa-status")
+async def mfa_status(_: str = Depends(get_current_user)):
+    data = [
+        {"user": "john.smith@contoso.com", "display_name": "John Smith", "department": "IT", "mfa_state": "Enforced", "mfa_methods": ["Authenticator App", "Phone"], "last_mfa_use": "2025-02-11", "strong_auth": True},
+        {"user": "sarah.johnson@contoso.com", "display_name": "Sarah Johnson", "department": "Sales", "mfa_state": "Enabled", "mfa_methods": ["SMS"], "last_mfa_use": "2025-02-10", "strong_auth": False},
+        {"user": "mike.davis@contoso.com", "display_name": "Mike Davis", "department": "Engineering", "mfa_state": "Enforced", "mfa_methods": ["Authenticator App", "FIDO2"], "last_mfa_use": "2025-02-11", "strong_auth": True},
+        {"user": "emily.chen@contoso.com", "display_name": "Emily Chen", "department": "Engineering", "mfa_state": "Disabled", "mfa_methods": [], "last_mfa_use": None, "strong_auth": False},
+        {"user": "robert.wilson@contoso.com", "display_name": "Robert Wilson", "department": "Operations", "mfa_state": "Disabled", "mfa_methods": [], "last_mfa_use": None, "strong_auth": False},
+        {"user": "lisa.anderson@contoso.com", "display_name": "Lisa Anderson", "department": "HR", "mfa_state": "Enforced", "mfa_methods": ["Authenticator App"], "last_mfa_use": "2025-02-11", "strong_auth": True},
+        {"user": "david.martinez@contoso.com", "display_name": "David Martinez", "department": "Finance", "mfa_state": "Enabled", "mfa_methods": ["Phone", "SMS"], "last_mfa_use": "2025-02-09", "strong_auth": False},
+        {"user": "jennifer.taylor@contoso.com", "display_name": "Jennifer Taylor", "department": "Marketing", "mfa_state": "Disabled", "mfa_methods": [], "last_mfa_use": None, "strong_auth": False},
+        {"user": "kevin.brown@contoso.com", "display_name": "Kevin Brown", "department": "IT", "mfa_state": "Enforced", "mfa_methods": ["Authenticator App", "FIDO2", "Phone"], "last_mfa_use": "2025-02-11", "strong_auth": True},
+        {"user": "nancy.white@contoso.com", "display_name": "Nancy White", "department": "Legal", "mfa_state": "Enabled", "mfa_methods": ["SMS"], "last_mfa_use": "2025-02-08", "strong_auth": False},
+        {"user": "patricia.lee@contoso.com", "display_name": "Patricia Lee", "department": "Finance", "mfa_state": "Enforced", "mfa_methods": ["Authenticator App"], "last_mfa_use": "2025-02-11", "strong_auth": True},
+        {"user": "mark.thompson@contoso.com", "display_name": "Mark Thompson", "department": "Finance", "mfa_state": "Enabled", "mfa_methods": ["Phone"], "last_mfa_use": "2025-02-05", "strong_auth": False},
+    ]
+    return {"data": data, "summary": {"total_users": 1248, "enforced": 487, "enabled": 489, "disabled": 272, "enforced_percent": 39.0, "enabled_percent": 39.2, "disabled_percent": 21.8}}
+
+@api_router.get("/entra/conditional-access")
+async def conditional_access(_: str = Depends(get_current_user)):
+    policies = [
+        {"name": "Require MFA for Admins", "state": "On", "users": "Admin Roles", "apps": "All Cloud Apps", "conditions": "Any Location", "grant_controls": "Require MFA", "created": "2024-01-15", "last_modified": "2024-12-01"},
+        {"name": "Block Legacy Authentication", "state": "On", "users": "All Users", "apps": "All Cloud Apps", "conditions": "Legacy Auth Clients", "grant_controls": "Block", "created": "2024-02-20", "last_modified": "2024-08-15"},
+        {"name": "Require Compliant Device", "state": "On", "users": "All Users", "apps": "Microsoft 365", "conditions": "External Networks", "grant_controls": "Require Compliant Device", "created": "2024-03-10", "last_modified": "2025-01-20"},
+        {"name": "High Risk User Block", "state": "On", "users": "All Users", "apps": "All Cloud Apps", "conditions": "High Risk Sign-in", "grant_controls": "Block", "created": "2024-04-05", "last_modified": "2024-11-30"},
+        {"name": "Privileged Identity Management", "state": "Report-Only", "users": "Global Admins", "apps": "Azure Portal", "conditions": "Any Platform", "grant_controls": "Require MFA + Compliant Device", "created": "2024-06-12", "last_modified": "2025-02-01"},
+        {"name": "Guest User Restrictions", "state": "On", "users": "Guest Users", "apps": "SharePoint Online", "conditions": "Any Location", "grant_controls": "Require MFA", "created": "2024-07-25", "last_modified": "2024-10-15"},
+    ]
+    return {"policies": policies, "summary": {"total_policies": 8, "enabled": 5, "report_only": 2, "disabled": 1}}
+
+# --- Alerts ---
+@api_router.get("/alerts")
+async def get_alerts(_: str = Depends(get_current_user)):
+    alerts = [
+        {"id": "alert-001", "title": "Suspicious Login from Unfamiliar Location", "description": "User mark.thompson@contoso.com signed in from Moscow, Russia - a new location.", "severity": "High", "category": "Identity", "status": "Active", "user": "mark.thompson@contoso.com", "timestamp": "2025-02-11 06:33:18", "source": "Entra ID"},
+        {"id": "alert-002", "title": "Impossible Travel Detected", "description": "User robert.wilson@contoso.com signed in from two geographically distant locations within 2 hours.", "severity": "High", "category": "Identity", "status": "Active", "user": "robert.wilson@contoso.com", "timestamp": "2025-02-11 05:12:44", "source": "Entra ID"},
+        {"id": "alert-003", "title": "External Email Forwarding Rule Created", "description": "User mark.thompson@contoso.com created a rule forwarding all emails to m.thompson@yahoo.com.", "severity": "Critical", "category": "Exchange", "status": "Active", "user": "mark.thompson@contoso.com", "timestamp": "2025-02-11 08:45:00", "source": "Exchange Online"},
+        {"id": "alert-004", "title": "MFA Not Enabled for Admin Account", "description": "Global Admin account emily.chen@contoso.com does not have MFA enabled.", "severity": "High", "category": "Compliance", "status": "Active", "user": "emily.chen@contoso.com", "timestamp": "2025-02-10 15:20:00", "source": "Entra ID"},
+        {"id": "alert-005", "title": "Inactive Mailboxes with Active Licenses", "description": "152 users haven't accessed their mailboxes in 90+ days but hold active licenses.", "severity": "Medium", "category": "Exchange", "status": "Active", "user": "Multiple Users", "timestamp": "2025-02-10 12:00:00", "source": "Exchange Online"},
+        {"id": "alert-006", "title": "Malware Detected in Email Traffic", "description": "22 malware-containing emails were detected and blocked in the last 24 hours.", "severity": "Medium", "category": "Security", "status": "Active", "user": "Multiple Users", "timestamp": "2025-02-11 07:00:00", "source": "Exchange Online"},
+        {"id": "alert-007", "title": "Account Confirmed Compromised", "description": "User james.campbell@contoso.com confirmed compromised after suspicious inbox manipulation.", "severity": "Critical", "category": "Identity", "status": "Active", "user": "james.campbell@contoso.com", "timestamp": "2025-02-08 14:30:00", "source": "Entra ID"},
+    ]
+    return {"alerts": alerts, "summary": {"total": 7, "critical": 2, "high": 3, "medium": 2, "low": 0, "active": 7, "resolved": 14}}
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "M365 Analytics API v1.0"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
 app.include_router(api_router)
-
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -77,11 +297,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
