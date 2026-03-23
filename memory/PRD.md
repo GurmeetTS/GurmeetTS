@@ -46,44 +46,29 @@ Build an AdminDroid-like Microsoft 365 Analytics & Reporting Platform — a mult
 
 ## What's Been Implemented (MVP - Feb 2026)
 
-### Modules Active
-1. **Executive Dashboard**
-   - Tenant health score (87/100 ring chart)
-   - 4 KPI cards: Total Users, Licensed Users, Storage, Active Alerts
-   - Secure Score card with breakdown
-   - License utilization bars
-   - Storage trends (Area chart - 6 months)
-   - User activity chart (Bar chart - 7 days)
-   - Recent alerts list
+## What's Been Implemented (MVP - Feb 2026)
 
-2. **Exchange Online Reports**
-   - Mailbox Usage (table + storage progress bars + pagination)
-   - Inactive Mailboxes (with risk classification: High/Medium/Low)
-   - Mail Traffic (multi-line chart for sent/received/spam/malware)
-   - Forwarding Rules (with critical risk alert banners)
+### Phase 1 - Core Modules (Feb 2026)
+1. **Executive Dashboard** - KPIs, Health Score, Secure Score, Charts, Recent Alerts
+2. **Exchange Online** - Mailbox Usage, Inactive Mailboxes, Mail Traffic, Forwarding Rules
+3. **Entra ID** - Sign-in Logs, Risky Users, MFA Status, Conditional Access Policies
+4. **Alerts Page** - With severity/category filtering
+5. **Settings Page** - Theme toggle, profile, notifications
+6. **JWT Auth** - Register + Login with bcrypt
 
-3. **Entra ID Reports**
-   - Sign-in Logs (with status/risk filtering)
-   - Risky Users (with compromised user alerts)
-   - MFA Status (pie chart + user table with state filter)
-   - Conditional Access Policies (policy table)
-
-4. **Alerts Page** (7 active mock alerts with severity/category filtering)
-
-5. **Settings Page** (theme toggle, profile info, notifications, platform info)
-
-### Features
-- JWT-based auth (register + login)
-- Collapsible sidebar navigation
-- Dark/Light/System mode toggle
-- Search + filtering on all report pages
-- Export CSV on all report pages
-- Pagination on Mailbox Usage
-- Responsive layout
-
-### Data Mode
-- **MOCKED** - All M365 data is realistic simulated data
-- No real Microsoft Graph API connection
+### Phase 2 - Multi-Tenant Management (Feb 2026)
+7. **Tenant Management Page** (`/tenants`)
+   - Add/Edit/Delete tenants (Demo or Real mode)
+   - Test Connection for real tenants (verifies Azure credentials)
+   - Sync data from real tenants (stores in MongoDB cache)
+   - Switch between tenants
+8. **Tenant Switcher** in Topbar dropdown
+9. **TenantContext** - Global axios interceptor auto-injects tenantId
+10. **Microsoft Graph API Integration** (`graph_service.py`)
+    - OAuth 2.0 client credentials flow with token caching
+    - Sign-in logs, Risky users, MFA status, CA policies, Dashboard overview, Mailbox usage
+    - Automatic fallback to mock data if Graph API fails
+11. **Secret Encryption** - Client secrets encrypted with Fernet (SHA256 derived key)
 
 ## Core Requirements (Static)
 - Must support enterprise security standards
